@@ -1,30 +1,59 @@
 import websocket
+import json
+import requests
+import zlib
 import time
+import datetime
+import pandas as pd
+
+def inflate(data):
+
+    decompress = zlib.decompressobj(-zlib.MAX_WBITS)
+    inflated = decompress.decompress(data)
+    inflated += decompress.flush()
+    return inflated
+
 class Socket():
+
+    url = 'https://www.okcoin.com/api/spot/v3/instruments'
+    pair = [x['instrument_id'] for x in requests.get(url).json()]
+    b = {"op": "subscribe", "args": [f'spot/depth5:{x}' for x in pair]}
+
     def __init__(self):
-
         pass
 
-    def On_message(self,_wsa, data):
+    def On_message(self, _wsa, data):
 
-        print(data)
+            data = inflate(data)
+            print(data)
+            # dbase = pd.DataFrame(data)
+            # print(dbase)
 
-    def OnOpen(self):
 
-        pass
+    def On_Open(self, WebSocket):
 
-    def OnClose(self):
+       WebSocket.send(json.dumps(self.b))
 
-        pass
 
-    def OnError(self):
+    def On_Close(self, *args):
 
-        pass
+       print(*args)
+
+
+    def On_Error(self, WebSocket, err):
+
+        print(WebSocket, err)
+
+
 
     def content(self):
 
         url = 'wss://real.okcoin.com:8443/ws/v3'
-        wsa = websocket.WebSocketApp(url, on_message = self.On_message)
+        wsa = websocket.WebSocketApp(url, on_message=self.On_message, on_error=self.On_Error, on_close=self.On_Close, on_open=self.On_Open)
         wsa.run_forever()
-a = Socket()
-a.content()
+
+
+if __name__ == '__main__':
+    a = Socket()
+    a.content()
+
