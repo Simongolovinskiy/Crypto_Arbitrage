@@ -3,8 +3,6 @@ from collections import Counter
 from itertools import product
 
 
-
-
 bind = 'USDT'
 triples = []
 sort = []
@@ -35,11 +33,6 @@ for pairs in sort:
         trade.append({pairs[0]: 'Buy', pairs[1]: 'Buy', pairs[2]: 'Sell'})
     else:
         trade.append({pairs[0]: 'Buy', pairs[1]: 'Sell', pairs[2]: 'Buy'})
-
-for i in trade:
-    if 'BTC/USDT' in i:
-        j = [j[0] for j in i.items()]
-        print(j)
 
 
 # with open('pairs.txt', 'w', encoding='utf-8') as file:

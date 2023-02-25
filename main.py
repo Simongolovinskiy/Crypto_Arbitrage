@@ -3,115 +3,170 @@ import json
 import requests
 import threading
 from triples import trade
+from decimal import Decimal
+import queue
+from datetime import datetime
+
 
 class Orderbook:
 
     def __init__(self, data) -> None:
-
+        self.bid_amount = {}
+        self.ask_amount = {}
+        self.asks = {}
+        self.bids = {}
         self.bid = {}
         self.ask = {}
-        self.Snapshot(data)
+        self.snapshot(data)
 
-    def Snapshot(self, data):
+    def snapshot(self, data):
 
         for ask in data['asks']:
-            self.ask[float(ask['price'])] = float(ask['amount'])
-
+            self.ask[Decimal(ask['price'])] = Decimal(ask['amount'])
+        self.asks = min(self.ask.keys())
+        self.ask_amount = self.ask[self.asks]
         for bid in data['bids']:
-            self.bid[float(bid['price'])] = float(bid['amount'])
+            self.bid[Decimal(bid['price'])] = Decimal(bid['amount'])
+        self.bids = max(self.bid.keys())
+        self.bid_amount = self.bid[self.bids]
 
-    def Update(self, data):
+    def update(self, data):
 
         for ask in data['asks']:
-            if float(ask['price']) not in self.ask.keys():
-                self.ask[float(ask['price'])] = float(ask['amount'])
+            if Decimal(ask['price']) not in self.ask.keys():
+                self.ask[Decimal(ask['price'])] = Decimal(ask['amount'])
             else:
                 if not ask['amount']:
-                    del self.ask[float(ask['price'])]
+                    del self.ask[Decimal(ask['price'])]
                 else:
-                    self.ask[float(ask['price'])] = float(ask['amount'])
+                    self.ask[Decimal(ask['price'])] = Decimal(ask['amount'])
+        self.asks = min(self.ask.keys())
 
         for bid in data['bids']:
-            if float(bid['price']) not in self.bid.keys():
-                self.bid[float(bid['price'])] = float(bid['amount'])
+            if Decimal(bid['price']) not in self.bid.keys():
+                self.bid[Decimal(bid['price'])] = Decimal(bid['amount'])
             else:
                 if not bid['amount']:
-                    del self.bid[float(bid['price'])]
+                    del self.bid[Decimal(bid['price'])]
                 else:
-                    self.bid[float(bid['price'])] = float(bid['amount'])
+                    self.bid[Decimal(bid['price'])] = Decimal(bid['amount'])
+        self.bids = max(self.bid.keys())
 
 
 class Socket:
 
     url = 'https://gate.kickex.com/api/v1/market/pairs?type=market'
     coins = [pair["pairName"] for pair in requests.get(url).json()]
-    Orderbooks = {}
 
-    def __init__(self) -> None:
+    def __init__(self,) -> None:
 
-        pass
+        self.message = {}
+        self.price_amount = {}
+        self.orderbooks = {}
+        self.orderbook_action = {'Buy': 'asks', 'Sell': 'bids'}
+        self.queue = queue.Queue()
+        self.final_message = queue.Queue()
+        self.temp_dict = {}
+        for trading in trade:
+            self.temp_dict[json.dumps(trading)] = {
+                'Trio_of_price': None,
+                'Time': None,
+                'Message': None
+            }
 
-    def Main(self):
+    def main(self):
 
         for name in self.coins:
-            threading.Thread(name=name, target=self.RunSocket, args=(name, )).start()
+            self.orderbooks[name] = None
+            threading.Thread(name=name, target=self.run_socket, args=(name, )).start()
 
-    def RunSocket(self, coin):
+        while True:
+            if not self.queue.empty():
+                name = self.queue.get()
+                print(f'Перезапуется поток {name}')
+                threading.Thread(name=name, target=self.run_socket, args=(name, )).start()
+
+    def run_socket(self, coin):
 
         url = 'wss:https://gate.kickex.com/ws'
         wsrun = websocket.WebSocketApp(
-            url, on_message=self.On_Message,
-            on_error=self.On_Error, on_close=self.On_Close,
-            on_open=lambda websocket: self.On_Open(websocket, coin)
+            url, on_message=self.on_message,
+            on_error=self.on_error, on_close=self.on_close,
+            on_open=lambda websocket: self.on_open(websocket, coin)
         )
 
         wsrun.run_forever()
 
-    def On_Open(self, WebSocket, coin):
+    def on_open(self, websocket, coin):
 
-        send = {"id": "dsncjksdnc", 'type': 'getOrderBookAndSubscribe', 'pair': coin}
-        params = json.dumps(send)
-        WebSocket.send(params)
+        args = {"id": "dsncjksdnc", 'type': 'getOrderBookAndSubscribe', 'pair': coin}
+        params = json.dumps(args)
+        websocket.send(params)
 
-    def On_Message(self, _wsa, answer):
+    def on_message(self, _wsa, answer):
 
         coin = threading.current_thread().name
         data = json.loads(answer)
+        commission = Decimal('0.998')
 
+        if len(data['asks']) == 0 and len(data['bids']) == 0:
+            return
         if len(data['asks']) > 1 and len(data['bids']) > 1:
-            if coin not in self.Orderbooks.keys():
-                self.Orderbooks[coin] = Orderbook(data)
+            self.orderbooks[coin] = Orderbook(data)
         else:
-            self.Orderbooks[coin].Update(data)
+            self.orderbooks[coin].update(data)
 
-        #bid, ask = self.Orderbooks[coin].bid, self.Orderbooks[coin].ask
+        for trading in trade:
+            if coin in trading.keys():
+                triple = json.dumps(trading)
+                pair_check = [self.orderbooks[pair].__dict__[self.orderbook_action[action]] for pair,
+                              action in trading.items() if self.orderbooks[pair]]
+                if len(pair_check) == 3 and self.temp_dict[triple]['Trio_of_price'] != pair_check:
 
-        for pair in self.Orderbooks:
-            for order in trade:
-                if pair in order and pair == coin:
-                    bid, ask = self.Orderbooks[coin].bid, self.Orderbooks[coin].ask
-                    print(coin)
-                    print(f'{bid}/{ask}')
-                    print('__________________________________________________________________________________________________________________________________________________________')
+                    for pair, action in trading.items():
+                        pairs_for_loop = list(trading.keys())
+                        if pair == pairs_for_loop[0]:
+                            if action == 'Buy':
+                                self.price_amount[self.orderbooks[pair].asks] = self.orderbooks[pair].ask_amount
+                                coin_amount = (1 / self.orderbooks[pair].asks) * commission
+                        else:
+                            if action == 'Buy':
+                                self.price_amount[self.orderbooks[pair].asks] = self.orderbooks[pair].ask_amount
+                                coin_amount = (coin_amount / self.orderbooks[pair].asks) * commission
+                            elif action == 'Sell':
+                                self.price_amount[self.orderbooks[pair].bids] = self.orderbooks[pair].bid_amount
+                                coin_amount = (coin_amount * self.orderbooks[pair].bids) * commission
+                    self.temp_dict[triple]['Trio_of_price'] = pair_check
 
-                    #print(f'{pair}/{coin}', f'{bid}/{ask}')
+                    print(coin_amount)
+                    if coin_amount > 1:
+                        if not self.temp_dict[triple]['Time']:
+                            self.temp_dict[triple]['Time'] = datetime.now()
+                            # temp_text = [Decimal(str(x)) for x, pair in zip(pair_check, pairs_for_loop)]
+                            self.temp_dict[triple]['Message'] = f'Профит: {coin_amount}\nТройка: {trading}\n Цена объем: {self.price_amount}\n'
+                            self.price_amount = {}
+                    else:
+                        if self.temp_dict[triple]['Time']:
+                            self.temp_dict[triple]['Message'] += f'Время: {(datetime.now() - self.temp_dict[triple]["Time"]).total_seconds()}'
+                            self.final_message.put(self.temp_dict[triple]['Message'])
+                            self.temp_dict[triple]['Time'] = None
+                            self.temp_dict[triple]['Message'] = None
+                            self.price_amount = {}
 
+    def on_close(self, *args):
 
+        self.orderbooks[threading.current_thread().name] = None
+        self.queue.put(threading.current_thread().name)
+        print(f' Отсоединился поток {threading.current_thread().name}')
+        print(f'Аргументы функции on_close {args}')
 
+    def on_error(self, websocket, err):
 
-
-    def On_Close(self, *args):
-
-        print(args)
-
-    def On_Error(self, WebSocket, err):
-
-        print(WebSocket, err)
+        print(f'Ошибка {err}')
 
 
 if __name__ == '__main__':
-    crypt = Socket()
-    crypt.Main()
-
+    crypto = Socket()
+    crypto.main()
 
 
