@@ -4,13 +4,13 @@ import threading
 import asyncio
 
 crypt = main.Socket()
-bot = aiogram.Bot('6002043488:AAEPXzY7pgxT1TLVvR_uLrOsA1wgHwuLXI4')
+bot = aiogram.Bot('TOKENAPI')
 dispatcher = aiogram.Dispatcher(bot)
 
 @dispatcher.message_handler(commands = ['start'])
 async def StartCommand(Message: aiogram.types.Message):
     await bot.delete_message(Message.chat.id, Message.message_id)
-    await bot.send_message(Message.chat.id, 'Все заебись')
+    await bot.send_message(Message.chat.id, 'All is good, waiting for signals.')
     print(f'Message: {Message}')
 
 
@@ -25,7 +25,7 @@ async def SendMessageToUsers():
                         await bot.send_message(IDStr, TGMessage)
                     except aiogram.utils.exceptions.BotBlocked:
                         pass
-                print(f'Сигнал отправлен для {UsersID}\nСигнал: {TGMessage}')
+                print(f'Signal sended to {UsersID}\nSygnal: {TGMessage}')
         except Exception as e:
             print(e)
         finally:
