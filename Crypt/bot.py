@@ -13,7 +13,7 @@ UsersID = ["Your id", "Your friend's id"]
 @dispatcher.message_handler(commands=['start'])
 async def StartCommand(Message: aiogram.types.Message):
     await bot.delete_message(Message.chat.id, Message.message_id)
-    await bot.send_message(Message.chat.id, 'Все заебись')
+    await bot.send_message(Message.chat.id, "It's time to start!")
     print(f'Message: {Message}')
 
 

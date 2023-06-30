@@ -37,8 +37,8 @@ for pairs in sort:
 
 #That needs to write example in txt file
 
-with open('pairs.txt', 'w', encoding='utf-8') as file:
-    for record in trade:
-        for key, value in record.items():
-            file.write(f' {key} : {value}')
-        file.write('\n')
+# with open('pairs.txt', 'w', encoding='utf-8') as file:
+#     for record in trade:
+#         for key, value in record.items():
+#             file.write(f' {key} : {value}')
+#         file.write('\n')

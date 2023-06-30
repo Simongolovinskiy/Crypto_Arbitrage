@@ -169,4 +169,3 @@ class Build_app:
         pass
         print(f'Ошибка {err}')
 
-
