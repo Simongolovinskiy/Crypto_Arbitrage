@@ -33,7 +33,7 @@ async def SendMessageToUsers():
 
 
 async def OnStartUp(x):
-    asyncio.create_task(SendMessageToUsers())
+    await asyncio.create_task(SendMessageToUsers())
 
 
 if __name__ == '__main__':
